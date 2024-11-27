@@ -34,11 +34,11 @@ namespace gptq {
 
 #if defined(USE_ROCM)
   #include <hipblas/hipblas.h>
-__host__ __forceinline__ hipblasStatus_t gemm1(
-    hipblasHandle_t handle, hipblasOperation_t transA,
-    hipblasOperation_t transB, int m, int n, int k, const half* alpha,
-    const half* AP, int lda, const half* BP, int ldb, const half* beta,
-    half* CP, int ldc) {
+__host__ __forceinline__ hipblasStatus_t
+gemm1(hipblasHandle_t handle, hipblasOperation_t transA,
+      hipblasOperation_t transB, int m, int n, int k, const half* alpha,
+      const half* AP, int lda, const half* BP, int ldb, const half* beta,
+      half* CP, int ldc) {
   return hipblasHgemm(handle, transA, transB, m, n, k,
                       reinterpret_cast<const hipblasHalf*>(alpha),
                       reinterpret_cast<const hipblasHalf*>(AP), lda,
@@ -57,11 +57,13 @@ __host__ __forceinline__ hipblasStatus_t gemm1(
         printf("hipblaslt error: %s\n", hipblasStatusToString(status_)); \
     } while (0)
 
-__host__ __forceinline__ hipblasStatus_t gemm2(
-    hipblasLtHandle_t handle, hipblasOperation_t transA,
-    hipblasOperation_t transB, int m, int n, int k, const half* alpha,
-    const half* AP, int lda, const half* BP, int ldb, const half* beta,
-    half* CP, int ldc) {
+__host__ __forceinline__ hipblasStatus_t
+gemm2(hipblasLtHandle_t handle, hipblasOperation_t transA,
+      hipblasOperation_t transB, int m, int n, int k, const half* alpha,
+      const half* AP, int lda, const half* BP, int ldb, const half* beta,
+      half* CP, int ldc) {
+  float alpha_f = static_cast<float>(*alpha);
+  float beta_f = static_cast<float>(*beta);
   // Create operation descriptor
   hipblasLtMatmulDesc_t matmulDesc;
   hipblasStatus_t status =
@@ -77,14 +79,12 @@ __host__ __forceinline__ hipblasStatus_t gemm2(
 
   // Set matrix layout descriptors
   hipblasLtMatrixLayout_t Adesc, Bdesc, Cdesc, Ddesc;
-  status = hipblasLtMatrixLayoutCreate(&Adesc, HIP_R_16F, m,
-                                       k, lda);
+  status = hipblasLtMatrixLayoutCreate(&Adesc, HIP_R_16F, m, k, lda);
   if (status != HIPBLAS_STATUS_SUCCESS) {
     return status;
   }
 
-  status = hipblasLtMatrixLayoutCreate(&Bdesc, HIP_R_16F, k,
-                                       n, ldb);
+  status = hipblasLtMatrixLayoutCreate(&Bdesc, HIP_R_16F, k, n, ldb);
   if (status != HIPBLAS_STATUS_SUCCESS) {
     return status;
   }
@@ -117,9 +117,9 @@ __host__ __forceinline__ hipblasStatus_t gemm2(
   }
 
   // Perform the matrix multiplication
-  status =
-      hipblasLtMatmul(handle, matmulDesc, alpha, AP, Adesc, BP, Bdesc, beta, CP,
-                      Cdesc, CP, Ddesc, &heuristicResult.algo, nullptr, 0, 0);
+  status = hipblasLtMatmul(handle, matmulDesc, &alpha_f, AP, Adesc, BP, Bdesc,
+                           &beta_f, CP, Cdesc, CP, Ddesc, &heuristicResult.algo,
+                           nullptr, 0, 0);
 
   if (status != HIPBLAS_STATUS_SUCCESS) {
     printf("hipblas lt matmul failed\n");
@@ -136,7 +136,6 @@ __host__ __forceinline__ hipblasStatus_t gemm2(
 
   return status;
 }
-
   // Replace hipblasHgemm with __compat_hipblasHbemm
   #define hipblasHgemm gemm2
 
